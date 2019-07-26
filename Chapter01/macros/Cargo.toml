@@ -1,0 +1,8 @@
+[package]
+name = "macros"
+version = "0.1.0"
+authors = ["Antoni Boucher <bouanto@zoho.com>"]
+
+[dependencies]
+num-traits = "0.2"
+
