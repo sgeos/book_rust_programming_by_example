@@ -24,7 +24,7 @@ enum ColorBase {
 }
 
 impl ColorBase {
-    fn to_hsv(&self) -> Hsv {
+    fn to_hsv(self) -> Hsv {
         match self {
             ColorBase::Red => Hsv::new::<f32>(0.0, 1.0, 1.0),
             ColorBase::Green => Hsv::new::<f32>(120.0, 1.0, 1.0),
@@ -50,7 +50,7 @@ pub fn main() -> Result<(), Box<Error>> {
     let mut hsv_offset = Hsv::new::<f32>(0.0, 0.0, 0.0); // hue degrees per second
     while let false = done {
         frame = frame.wrapping_add(1);
-        if 0 == frame % FPS as u64 {
+        if 0 == frame % u64::from(FPS) {
             square_color_base = match square_color_base {
                 ColorBase::Red => ColorBase::Green,
                 ColorBase::Green => ColorBase::Blue,
