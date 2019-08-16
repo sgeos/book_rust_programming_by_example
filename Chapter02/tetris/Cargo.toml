@@ -9,4 +9,8 @@ edition = "2018"
 [dependencies]
 palette = "0.4.1"
 sdl2 = "0.32.2"
+sdl2-sys = "0.32.6"
+
+[features]
+default = ["sdl2/image"]
 
