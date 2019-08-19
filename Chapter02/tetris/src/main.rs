@@ -44,10 +44,10 @@ pub fn main() -> Result<(), Box<Error>> {
     let mut canvas = window.into_canvas().target_texture().present_vsync().build()?;
     let texture_creator: TextureCreator<_> = canvas.texture_creator();
     let mut square_texture: Texture = create_texture_square(&texture_creator, TEXTURE_SIZE)?;
-    let mut background_surface: Surface = Surface::from_file("assets/background.png")?;
-    unsafe {
-      sdl2_sys::SDL_ConvertSurfaceFormat((&mut background_surface).as_ptr() as *mut sdl2_sys::SDL_Surface, sdl2_sys::SDL_PIXELFORMAT_RGBA8888 as u32, 0);
-    }
+
+    let background_surface_data = hsv_pixels_from_file("assets/background.png")?;
+
+    let background_surface: Surface = Surface::from_file("assets/background.png")?;
 
     let mut done = false;
     let mut frame: u64 = 0;
@@ -89,24 +89,31 @@ pub fn main() -> Result<(), Box<Error>> {
     Ok(())
 }
 
-fn create_hue_shifted_texture_from_surface<'a>(
-    texture_creator: &'a TextureCreator<WindowContext>,
-    surface: &'a Surface
-) -> Result<Texture<'a>, sdl2::render::TextureValueError> {
-    let width = surface.width();
-    let height = surface.height();
-    let pitch = surface.pitch();
-    let src_pixels: *const u8 = (*surface.raw()).pixels as *const u8;
-    let texture = texture_creator.create_texture_target(PixelFormatEnum::RGBA8888, width, height)?;
-    let dst_pixels: *mut u8 = (*texture.raw()).pixels as *mut u8;
-    if src_pixels.is_null() || dst_pixels.is_null() {
-      return sdl2::render::TextureValueError::SdlError("No pixel data.");
-    } else if pitch < 3 {
-      return sdl2::render::TextureValueError::SdlError("Unexpected pitch.");
+fn hsv_pixels_from_file(filename: &str) -> Result<Vec<u8>, String> {
+    let surface: Surface = Surface::from_file(filename)?;
+    let mut surface_pointer = surface.raw() as *mut sdl2_sys::SDL_Surface;
+    surface_pointer = unsafe {
+        sdl2_sys::SDL_ConvertSurfaceFormat(surface_pointer, sdl2_sys::SDL_PIXELFORMAT_RGBA8888 as u32, 0)
+    };
+    if surface_pointer.is_null() {
+        return Err("Error: Could not convert image to HSV format.".to_string())
     }
-    //for i in 0..width*height*pitch {
-    //}
-    texture
+    let pitch = unsafe { (*surface_pointer).pitch } as usize;
+    if pitch != 4 {
+        return Err(format!("Error: Unexpected pitch size {}.", pitch).to_string())
+    }
+    let pixel_pointer = unsafe { (*surface_pointer).pixels } as *const u8;
+    if pixel_pointer.is_null() {
+        return Err("Error: No pixel data.".to_string())
+    }
+    let width = unsafe { (*surface_pointer).w } as usize;
+    let height = unsafe { (*surface_pointer).h } as usize;
+    let capacity = width * height * pitch;
+    let mut result = Vec::<u8>::with_capacity(capacity);
+    for i in 0..capacity {
+        result[i] = unsafe { *pixel_pointer.offset(i as isize) };
+    }
+    Ok(result)
 }
 
 fn create_texture_square<'a>(
