@@ -23,10 +23,11 @@ const NB_HIGHSCORES: usize = 5;
 
 #[derive(Clone, Copy)]
 enum TextureColor {
-  Green,
-  Blue,
+  _Green,
+  _Blue,
   _Red,
   Black,
+  White,
 }
 
 type Piece = Vec<Vec<u8>>;
@@ -364,6 +365,7 @@ impl Tetris {
   }
 
   fn check_lines(&mut self) {
+    let mut lines = 0;
     let mut y = 0;
     let mut score_add = 0;
 
@@ -380,10 +382,11 @@ impl Tetris {
         score_add += self.current_level;
         self.game_map.remove(y);
         y -= 1;
+        lines += 1;
       }
       y += 1;
     }
-    if 0 == self.game_map.len() {
+    if 4 <= lines {
       // A "tetris"!
       score_add += 1000;
     }
@@ -603,27 +606,43 @@ fn is_time_over(tetris: &Tetris, timer: &SystemTime) -> bool {
   }
 }
 
-fn create_texture_rect<'a>(
+fn create_texture_square<'a>(
   canvas: &mut Canvas<Window>,
   texture_creator: &'a TextureCreator<WindowContext>,
   color: TextureColor,
   size: u32
 ) -> Option<Texture<'a>> {
+  let (red, green, blue) = match color {
+    TextureColor::_Red => (255, 0, 0),
+    TextureColor::_Green => (0, 255, 0),
+    TextureColor::_Blue => (0, 0, 255),
+    TextureColor::Black => (0, 0, 0),
+    TextureColor::White => (255, 255, 255),
+    //_ => (0, 0, 0),
+  };
+  create_texture_rect(canvas, texture_creator, red, green, blue, size, size)
+}
+ 
+fn create_texture_rect<'a>(
+  canvas: &mut Canvas<Window>,
+  texture_creator: &'a TextureCreator<WindowContext>,
+  red: u8,
+  green: u8,
+  blue: u8,
+  width: u32,
+  height: u32,
+) -> Option<Texture<'a>> {
   // We'll want to handle failures outside of this function.
-  if let Ok(mut square_texture) =
-    texture_creator.create_texture_target(None, size, size)
+  if let Ok(mut texture) =
+    texture_creator.create_texture_target(None, width, height)
   {
-    canvas.with_texture_canvas(&mut square_texture, |texture| {
-      match color {
-        // For now, TextureColor only handles four colors.
-        TextureColor::Green => texture.set_draw_color(Color::RGB(0, 255, 0)),
-        TextureColor::Blue => texture.set_draw_color(Color::RGB(0, 0, 255)),
-        TextureColor::_Red => texture.set_draw_color(Color::RGB(255, 0, 0)),
-        TextureColor::Black => texture.set_draw_color(Color::RGB(0, 0, 0)),
+    canvas.with_texture_canvas(&mut texture,
+      |texture| {
+        texture.set_draw_color(Color::RGB(red, green, blue));
+        texture.clear();
       }
-      texture.clear();
-    }).expect("Failed to color a texture");
-    Some(square_texture)
+    ).expect("Failed to color a texture");
+    Some(texture)
   }
   else {
     // An error occured so we return nothing and let the function caller handle the error.
@@ -659,7 +678,7 @@ fn display_game_information<'a>(
   start_x_point: i32
 ) {
   let score_text = format!("Score: {}", tetris.score);
-  let lines_sent_text = format!("Lines sent: {}", tetris.nb_lines);
+  let lines_sent_text = format!("Lines: {}", tetris.nb_lines);
   let level_text = format!("Level: {}", tetris.current_level);
 
   let score =
@@ -721,17 +740,17 @@ fn main() {
 
   let texture_creator: TextureCreator<_> = canvas.texture_creator();
 
-  let grid = create_texture_rect(
+  let grid = create_texture_square(
     &mut canvas,
     &texture_creator,
     TextureColor::Black,
     TETRIS_HEIGHT as u32 * 10
   ).expect("Failed to create a texture");
 
-  let border = create_texture_rect(
+  let border = create_texture_square(
     &mut canvas,
     &texture_creator,
-    TextureColor::Blue,
+    TextureColor::White,
     TETRIS_HEIGHT as u32 * 10 + 20
   ).expect("Failed to create a texture");
 
@@ -740,7 +759,8 @@ fn main() {
       create_texture_rect(
         &mut canvas,
         &texture_creator,
-        TextureColor::Green,
+        $r, $g, $b,
+        TETRIS_HEIGHT as u32,
         TETRIS_HEIGHT as u32
       ).unwrap()
     )
@@ -836,18 +856,12 @@ fn main() {
       .expect("Couldn't load the font");
     font.set_style(sdl2::ttf::STYLE_BOLD);
 
-    let rendered_text =
-      create_texture_from_text(&texture_creator, &font, "test", 0, 0, 0)
-      .expect("Cannot render text");
-     canvas.copy(
-       &rendered_text, None, Some(Rect::new(width as i32 - 40, 0, 40, 30))
-     ).expect("Couldn't copy text");
      display_game_information(
        &tetris,
        &mut canvas,
        &texture_creator,
        &font,
-       width as i32 - grid_x - 10 - 275
+       430 // width as i32 - grid_x - 10
      );
 
     for (line_nb, line) in tetris.game_map.iter().enumerate() {
