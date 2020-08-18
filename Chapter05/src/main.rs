@@ -7,9 +7,15 @@ use gio::{ApplicationExt, ApplicationExtManual, ApplicationFlags};
 use gtk::{
   Application,
   ApplicationWindow,
-  WidgetExt,
+  ContainerExt,
   GtkWindowExt,
+  SeparatorToolItem,
+  Toolbar,
+  ToolButton,
+  WidgetExt,
 };
+
+const PLAY_STOCK: &str = "gtk-media-play";
 
 fn main() {
   let application =
@@ -22,12 +28,30 @@ fn main() {
     |application| {
       let window = ApplicationWindow::new(&application);
       window.set_title("Rusic");
-      window.connect_delete_event(
-        |_, _| {
-          gtk::Inhibit(false)
-        }
-      );
-      window.show();
+      let toolbar = Toolbar::new();
+      window.add(&toolbar);
+      let open_button = ToolButton::new_from_stock("gtk-open");
+      toolbar.add(&open_button);
+      let previous_button = ToolButton::new_from_stock("gtk-media-previous");
+      toolbar.add(&previous_button);
+      let play_button = ToolButton::new_from_stock(PLAY_STOCK);
+      toolbar.add(&play_button);
+      let stop_button = ToolButton::new_from_stock("gtk-media-stop");
+      toolbar.add(&stop_button);
+      let next_button = ToolButton::new_from_stock("gtk-media-next");
+      toolbar.add(&next_button);
+
+      toolbar.add(&SeparatorToolItem::new());
+
+      let remove_button = ToolButton::new_from_stock("gtk-remove");
+      toolbar.add(&remove_button);
+
+      toolbar.add(&SeparatorToolItem::new());
+
+      let quit_button = ToolButton::new_from_stock("gtk-quit");
+      toolbar.add(&quit_button);
+
+      window.show_all();
     }
   );
   application.connect_activate(
