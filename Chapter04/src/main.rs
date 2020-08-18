@@ -803,6 +803,16 @@ fn main() {
     texture!(45, 216, 47),
   ];
 
+  let ghost_textures = [
+    texture!(128, 34, 34),
+    texture!(128, 110, 34),
+    texture!(118, 75, 18),
+    texture!(85, 49, 118),
+    texture!(38, 74, 119),
+    texture!(19, 109, 112),
+    texture!(22, 108, 23),
+  ];
+
   loop {
     if is_time_over(&tetris, &timer) {
       let mut make_permanent = false;
@@ -852,6 +862,23 @@ fn main() {
     let mut quit = false;
     if !handle_events(&mut tetris, &mut quit, &mut timer, &mut event_pump) {
       if let Some(ref mut piece) = tetris.current_piece {
+        let mut ghost_y = 0;
+        while true == piece.test_position(
+          &tetris.game_map,
+          piece.current_state as usize,
+          piece.x,
+          piece.y + ghost_y
+        ) {
+          ghost_y += 1;
+        }
+        ghost_y -= 1;
+        display_game_map(
+          grid_x + piece.x as i32 * TETRIS_HEIGHT as i32,
+          grid_y + (ghost_y + piece.y) as i32 * TETRIS_HEIGHT as i32,
+          &piece.states[piece.current_state as usize],
+          &mut canvas,
+          &ghost_textures
+        );
         display_game_map(
           grid_x + piece.x as i32 * TETRIS_HEIGHT as i32,
           grid_y + piece.y as i32 * TETRIS_HEIGHT as i32,
