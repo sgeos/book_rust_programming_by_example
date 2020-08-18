@@ -3,10 +3,10 @@ extern crate sdl2;
 
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
-//use sdl2::pixels::Color;
-//use sdl2::rect::Rect;
-//use sdl2::render::{Canvas, Texture, TextureCreator};
-//use sdl2::video::{Window, WindowContext};
+use sdl2::pixels::Color;
+use sdl2::rect::Rect;
+use sdl2::render::{Canvas, Texture, TextureCreator};
+use sdl2::video::{Window, WindowContext};
 
 use std::fs::File;
 use std::io::{self, Read, Write};
@@ -15,9 +15,19 @@ use std::time::{Duration, SystemTime};
 
 const TETRIS_HEIGHT: usize = 40;
 const HIGHSCORE_FILE: &'static str = "scores.txt";
-const LEVEL_TIMES: [u32; 10] = [1000, 850, 700, 600, 500, 400, 300, 250, 221, 190];
-const LEVEL_LINES: [u32; 10] = [20, 40, 60, 80, 100, 120, 140, 160, 180, 200];
+const LEVEL_TIMES: [u32; 10] =
+  [1000, 850, 700, 600, 500, 400, 300, 250, 221, 190];
+const LEVEL_LINES: [u32; 10] =
+  [20, 40, 60, 80, 100, 120, 140, 160, 180, 200];
 const NB_HIGHSCORES: usize = 5;
+
+#[derive(Clone, Copy)]
+enum TextureColor {
+  Green,
+  Blue,
+  _Red,
+  Black,
+}
 
 type Piece = Vec<Vec<u8>>;
 type States = Vec<Piece>;
@@ -593,18 +603,158 @@ fn is_time_over(tetris: &Tetris, timer: &SystemTime) -> bool {
   }
 }
 
+fn create_texture_rect<'a>(
+  canvas: &mut Canvas<Window>,
+  texture_creator: &'a TextureCreator<WindowContext>,
+  color: TextureColor,
+  size: u32
+) -> Option<Texture<'a>> {
+  // We'll want to handle failures outside of this function.
+  if let Ok(mut square_texture) =
+    texture_creator.create_texture_target(None, size, size)
+  {
+    canvas.with_texture_canvas(&mut square_texture, |texture| {
+      match color {
+        // For now, TextureColor only handles four colors.
+        TextureColor::Green => texture.set_draw_color(Color::RGB(0, 255, 0)),
+        TextureColor::Blue => texture.set_draw_color(Color::RGB(0, 0, 255)),
+        TextureColor::_Red => texture.set_draw_color(Color::RGB(255, 0, 0)),
+        TextureColor::Black => texture.set_draw_color(Color::RGB(0, 0, 0)),
+      }
+      texture.clear();
+    }).expect("Failed to color a texture");
+    Some(square_texture)
+  }
+  else {
+    // An error occured so we return nothing and let the function caller handle the error.
+    None
+  }
+}
+
+fn create_texture_from_text<'a>(
+  texture_creator: &'a
+  TextureCreator<WindowContext>,
+  font: &sdl2::ttf::Font,
+  text: &str,
+  r: u8,
+  g: u8,
+  b: u8,
+) -> Option<Texture<'a>> {
+  if let Ok(surface) = font.render(text).blended(Color::RGB(r, g, b)) {
+    texture_creator.create_texture_from_surface(&surface).ok()
+  } else {
+    None
+  }
+}
+
+fn get_rect_from_text(text: &str, x: i32, y: i32) -> Option<Rect> {
+  Some(Rect::new(x, y, text.len() as u32 * 20, 30))
+}
+
+fn display_game_information<'a>(
+  tetris: &Tetris,
+  canvas: &mut Canvas<Window>,
+  texture_creator: &'a TextureCreator<WindowContext>,
+  font: &sdl2::ttf::Font,
+  start_x_point: i32
+) {
+  let score_text = format!("Score: {}", tetris.score);
+  let lines_sent_text = format!("Lines sent: {}", tetris.nb_lines);
+  let level_text = format!("Level: {}", tetris.current_level);
+
+  let score =
+    create_texture_from_text(
+      &texture_creator, &font,
+      &score_text,
+      255, 255, 255
+    ).expect("Cannot render text");
+  let lines_sent =
+    create_texture_from_text(
+      &texture_creator, &font,
+      &lines_sent_text,
+      255, 255, 255
+    ).expect("Cannot render text");
+  let level =
+    create_texture_from_text(
+      &texture_creator, &font,
+      &level_text,
+      255, 255, 255
+    ).expect("Cannot render text");
+
+  canvas
+    .copy(
+      &score, None,
+      get_rect_from_text(&score_text, start_x_point, 75)
+    ).expect("Couldn't copy text");
+  canvas
+    .copy(
+      &lines_sent, None,
+      get_rect_from_text(&score_text, start_x_point, 125)
+    ).expect("Couldn't copy text");
+  canvas
+    .copy(
+      &level, None,
+      get_rect_from_text(&score_text, start_x_point, 160)
+    ).expect("Couldn't copy text");
+}
+
 fn main() {
-  let mut tetris = Tetris::new();
-  let mut timer = SystemTime::now();
   let sdl_context = sdl2::init().expect("SDL initialization failed");
+  let video_subsystem =
+    sdl_context.video().expect("Couldn't get SDL video subsystem");
   let width = 600;
   let height = 800;
-
+  let mut timer = SystemTime::now();
   let mut event_pump =
     sdl_context.event_pump().expect("Failed to get SDL event pump");
 
-  let _grid_x = (width - TETRIS_HEIGHT as u32 * 10) as i32 / 2;
-  let _grid_y = (height - TETRIS_HEIGHT as u32 * 16) as i32 / 2;
+  let grid_x = 20; // (width - TETRIS_HEIGHT as u32 * 10) as i32 / 2;
+  let grid_y = (height - TETRIS_HEIGHT as u32 * 16) as i32 / 2;
+  let mut tetris = Tetris::new();
+
+  let window = video_subsystem.window("Tetris", width, height)
+    .position_centered().build().expect("Failed to create window");
+
+  let mut canvas = window.into_canvas()
+    .target_texture().present_vsync().build()
+    .expect("Couldn't get window's canvas");
+
+  let texture_creator: TextureCreator<_> = canvas.texture_creator();
+
+  let grid = create_texture_rect(
+    &mut canvas,
+    &texture_creator,
+    TextureColor::Black,
+    TETRIS_HEIGHT as u32 * 10
+  ).expect("Failed to create a texture");
+
+  let border = create_texture_rect(
+    &mut canvas,
+    &texture_creator,
+    TextureColor::Blue,
+    TETRIS_HEIGHT as u32 * 10 + 20
+  ).expect("Failed to create a texture");
+
+  macro_rules! texture {
+    ($r:expr, $g:expr, $b:expr) => (
+      create_texture_rect(
+        &mut canvas,
+        &texture_creator,
+        TextureColor::Green,
+        TETRIS_HEIGHT as u32
+      ).unwrap()
+    )
+  }
+
+  let textures = [
+    texture!(255, 69, 69),
+    texture!(255, 220, 69),
+    texture!(237, 150, 37),
+    texture!(171, 99, 237),
+    texture!(77, 149, 239),
+    texture!(39, 218, 225),
+    texture!(45, 216, 47),
+  ];
 
   loop {
     if is_time_over(&tetris, &timer) {
@@ -620,7 +770,26 @@ fn main() {
       timer = SystemTime::now();
     }
 
-    // We need to draw the tetris "grid" in here.
+    canvas.set_draw_color(Color::RGB(255, 0, 0));
+    canvas.clear();
+
+    canvas.copy(
+      &border, None,
+      Rect::new(
+        10,
+        (height - TETRIS_HEIGHT as u32 * 16) as i32 / 2 - 10,
+        TETRIS_HEIGHT as u32 * 10 + 20, TETRIS_HEIGHT as u32 * 16 + 20
+      )
+    ).expect("Couldn't copy texture into window");
+    canvas.copy(
+      &grid,
+      None,
+      Rect::new(
+        20,
+        (height - TETRIS_HEIGHT as u32 * 16) as i32 / 2,
+        TETRIS_HEIGHT as u32 * 10, TETRIS_HEIGHT as u32 * 16
+      )
+    ).expect("Couldn't copy texture into window");
 
     if tetris.current_piece.is_none() {
       let current_piece = Tetris::create_new_tetrimino();
@@ -632,8 +801,28 @@ fn main() {
     }
     let mut quit = false;
     if !handle_events(&mut tetris, &mut quit, &mut timer, &mut event_pump) {
-      if let Some(ref mut _piece) = tetris.current_piece {
-        // We need to draw our current tetrimino in here.
+      if let Some(ref mut piece) = tetris.current_piece {
+        for (line_nb, line) in
+          piece.states[piece.current_state as usize].iter().enumerate()
+        {
+          for (case_nb, case) in line.iter().enumerate() {
+            if *case == 0 {
+              continue
+            }
+            canvas.copy(
+              &textures[*case as usize - 1],
+              None,
+              Rect::new(
+                grid_x + (piece.x + case_nb as isize) as i32 *
+                  TETRIS_HEIGHT as i32,
+                grid_y + (piece.y + line_nb) as i32 *
+                  TETRIS_HEIGHT as i32,
+                TETRIS_HEIGHT as u32,
+                TETRIS_HEIGHT as u32
+              )
+            ).expect("Couldn't copy texture into window");
+          }
+        }
       }
     }
     if quit {
@@ -641,7 +830,43 @@ fn main() {
       break
     }
 
-    // We need to draw the game map in here.
+    let ttf_context = sdl2::ttf::init()
+      .expect("SDL TTF initialization failed");
+    let mut font = ttf_context.load_font("assets/lucon.ttf", 128)
+      .expect("Couldn't load the font");
+    font.set_style(sdl2::ttf::STYLE_BOLD);
+
+    let rendered_text =
+      create_texture_from_text(&texture_creator, &font, "test", 0, 0, 0)
+      .expect("Cannot render text");
+     canvas.copy(
+       &rendered_text, None, Some(Rect::new(width as i32 - 40, 0, 40, 30))
+     ).expect("Couldn't copy text");
+     display_game_information(
+       &tetris,
+       &mut canvas,
+       &texture_creator,
+       &font,
+       width as i32 - grid_x - 10 - 275
+     );
+
+    for (line_nb, line) in tetris.game_map.iter().enumerate() {
+      for (case_nb, case) in line.iter().enumerate() {
+        if *case == 0 {
+          continue
+        }
+        canvas.copy(
+          &textures[*case as usize - 1], None,
+          Rect::new(
+            grid_x + case_nb as i32 * TETRIS_HEIGHT as i32,
+            grid_y + line_nb as i32 * TETRIS_HEIGHT as i32,
+            TETRIS_HEIGHT as u32,
+            TETRIS_HEIGHT as u32
+          )
+        ).expect("Couldn't copy texture into window");
+      }
+    }
+    canvas.present();
 
     sleep(Duration::new(0, 1_000_000_000u32 / 60));
   }
